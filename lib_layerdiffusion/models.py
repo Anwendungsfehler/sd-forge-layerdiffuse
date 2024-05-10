@@ -265,8 +265,8 @@ class TransparentVAEDecoder:
                 cb = (0.5 + (cb - 0.5) * 0.1)[None, ..., None]
                 cb = torch.from_numpy(cb).to(fg)
 
-                # vis = fg * alpha + cb * (1 - alpha)  # Ursprüngliche Überlagerung
-                vis = fg * alpha  # Überlagerung ausgeschaltet
+                vis = fg * alpha + cb * (1 - alpha)  # Ursprüngliche Überlagerung
+                #vis = fg * alpha  # Überlagerung ausgeschaltet
                 
                 vis_list.append(vis)
 
