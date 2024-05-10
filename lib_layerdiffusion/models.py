@@ -235,17 +235,17 @@ class TransparentVAEDecoder:
         return median
 
     def patch(self, p, vae_patcher, output_origin):
-    @torch.no_grad()
-    def wrapper(func, latent):
-        pixel = func(latent).movedim(-1, 1).to(device=self.load_device, dtype=self.dtype)
+        @torch.no_grad()
+        def wrapper(func, latent):
+            pixel = func(latent).movedim(-1, 1).to(device=self.load_device, dtype=self.dtype)
 
-        if output_origin:
-            origin_outputs = (pixel.movedim(1, -1) * 255.0).detach().cpu().float().numpy().clip(0, 255).astype(np.uint8)
-            for png in origin_outputs:
-                p.extra_result_images.append(png)
+            if output_origin:
+                origin_outputs = (pixel.movedim(1, -1) * 255.0).detach().cpu().float().numpy().clip(0, 255).astype(np.uint8)
+                for png in origin_outputs:
+                    p.extra_result_images.append(png)
 
-    vae_patcher.set_model_vae_decode_wrapper(wrapper)
-    return
+        vae_patcher.set_model_vae_decode_wrapper(wrapper)
+        return
 
 
 class TransparentVAEEncoder:
