@@ -235,41 +235,48 @@ class TransparentVAEDecoder:
         return median
 
     def patch(self, p, vae_patcher, output_origin):
-    @torch.no_grad()
-    def wrapper(func, latent):
-        pixel = func(latent).movedim(-1, 1).to(device=self.load_device, dtype=self.dtype)
+        @torch.no_grad()
+        def wrapper(func, latent):
+            pixel = func(latent).movedim(-1, 1).to(device=self.load_device, dtype=self.dtype)
 
-        if output_origin:
-            origin_outputs = (pixel.movedim(1, -1) * 255.0).detach().cpu().float().numpy().clip(0, 255).astype(np.uint8)
-            for png in origin_outputs:
+            if output_origin:
+                origin_outputs = (pixel.movedim(1, -1) * 255.0).detach().cpu().float().numpy().clip(0, 255).astype(np.uint8)
+                for png in origin_outputs:
+                    p.extra_result_images.append(png)
+
+            latent = latent.to(device=self.load_device, dtype=self.dtype)
+            model_management.load_model_gpu(self.model)
+            vis_list = []
+
+            for i in range(int(latent.shape[0])):
+                if self.mod_number != 1 and i % self.mod_number != 0:
+                    vis_list.append(pixel[i:i+1].movedim(1, -1))
+                    continue
+
+                y = self.estimate_augmented(pixel[i:i+1], latent[i:i+1])
+
+                y = y.clip(0, 1).movedim(1, -1)
+                alpha = y[..., :1]
+                fg = y[..., 1:]
+
+                B, H, W, C = fg.shape
+                cb = checkerboard(shape=(H // 64, W // 64))
+                cb = cv2.resize(cb, (W, H), interpolation=cv2.INTER_NEAREST)
+                cb = (0.5 + (cb - 0.5) * 0.1)[None, ..., None]
+                cb = torch.from_numpy(cb).to(fg)
+
+                vis = fg * alpha + cb * (1 - alpha)
+                vis_list.append(vis)
+
+                png = torch.cat([fg, alpha], dim=3)[0]
+                png = (png * 255.0).detach().cpu().float().numpy().clip(0, 255).astype(np.uint8)
                 p.extra_result_images.append(png)
 
-        latent = latent.to(device=self.load_device, dtype=self.dtype)
-        model_management.load_model_gpu(self.model)
-        vis_list = []
+            vis_list = torch.cat(vis_list, dim=0)
+            return vis_list
 
-        for i in range(int(latent.shape[0])):
-            if self.mod_number != 1 and i % self.mod_number != 0:
-                vis_list.append(pixel[i:i+1].movedim(1, -1))
-                continue
-
-            y = self.estimate_augmented(pixel[i:i+1], latent[i:i+1])
-
-            y = y.clip(0, 1).movedim(1, -1)
-            alpha = y[..., :1]
-            fg = y[..., 1:]
-
-            vis_list.append(fg * alpha)
-
-            png = torch.cat([fg, alpha], dim=3)[0]
-            png = (png * 255.0).detach().cpu().float().numpy().clip(0, 255).astype(np.uint8)
-            p.extra_result_images.append(png)
-
-        vis_list = torch.cat(vis_list, dim=0)
-        return vis_list
-
-    vae_patcher.set_model_vae_decode_wrapper(wrapper)
-    return
+        vae_patcher.set_model_vae_decode_wrapper(wrapper)
+        return
 
 
 class TransparentVAEEncoder:
